@@ -1,6 +1,7 @@
 """
 Module for pydantic models for configuration
 """
+
 # pylint: disable=too-many-lines
 
 import logging
@@ -61,7 +62,11 @@ class RemappedParameters(BaseModel):
 class PretrainingDataset(BaseModel):
     """pretraining dataset configuration subset"""
 
+    name: Optional[str] = None
     path: Optional[str] = None
+    split: Optional[str] = "train"
+    text_column: Optional[str] = "text"
+    type: Optional[str] = "pretrain"
 
 
 class UserDefinedPrompterType(BaseModel):
@@ -136,6 +141,7 @@ class ChatTemplate(str, Enum):
     chatml = "chatml"  # pylint: disable=invalid-name
     inst = "inst"  # pylint: disable=invalid-name
     gemma = "gemma"  # pylint: disable=invalid-name
+    cohere = "cohere"  # pylint: disable=invalid-name
 
 
 class LoftQConfig(BaseModel):
@@ -449,7 +455,7 @@ class AxolotlInputConfig(
     dataset_shard_idx: Optional[int] = None
 
     pretraining_dataset: Optional[  # type: ignore
-        conlist(Union[SFTDataset, PretrainingDataset], min_length=1)
+        conlist(Union[PretrainingDataset, SFTDataset], min_length=1)
     ] = Field(
         default=None, metadata={"help": {"streaming dataset to use for pretraining"}}
     )
@@ -507,6 +513,14 @@ class AxolotlInputConfig(
     sample_packing: Optional[bool] = None
     eval_sample_packing: Optional[bool] = None
     pad_to_sequence_len: Optional[bool] = None
+
+    pretrain_multipack_buffer_size: Optional[int] = 10_000
+    pretrain_multipack_attn: Optional[bool] = Field(
+        default=True,
+        metadata={
+            "help": "whether to prevent cross attention for packed sequences during pretraining",
+        },
+    )
 
     xformers_attention: Optional[bool] = None
     sdp_attention: Optional[bool] = None
@@ -639,6 +653,20 @@ class AxolotlInputConfig(
         if data.get("sample_packing") and data.get("xformers_attention"):
             raise ValueError(
                 "sample_packing not compatible with xformers_attention. Use flash_attention"
+            )
+
+        return data
+
+    @model_validator(mode="before")
+    @classmethod
+    def check_sample_packing_wo_flash(cls, data):
+        if (
+            data.get("sample_packing")
+            and not data.get("flash_attention")
+            and not data.get("sdp_attention")
+        ):
+            raise ValueError(
+                "sample_packing requires flash_attention or sdp_attention to be set to true"
             )
 
         return data
