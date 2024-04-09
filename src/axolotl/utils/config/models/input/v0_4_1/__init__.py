@@ -242,17 +242,6 @@ class LoraConfig(BaseModel):
                     raise ValueError("Require cfg.load_in_4bit to be True for qlora")
         return self
 
-    @model_validator(mode="before")
-    @classmethod
-    def validate_quantized_dora(cls, data):
-        if data.get("peft_use_dora") and (
-            data.get("load_in_8bit") or data.get("load_in_4bit")
-        ):
-            raise ValueError(
-                "`peft_use_dora` is not currently compatible with quantized weights."
-            )
-        return data
-
 
 class ReLoRAConfig(BaseModel):
     """ReLoRA configuration subset"""
@@ -665,8 +654,8 @@ class AxolotlInputConfig(
             and not data.get("flash_attention")
             and not data.get("sdp_attention")
         ):
-            raise ValueError(
-                "sample_packing requires flash_attention or sdp_attention to be set to true"
+            LOG.warning(
+                "sample_packing without flash_attention or sdp_attention does not handle cross-attention."
             )
 
         return data
